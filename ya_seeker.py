@@ -28,6 +28,14 @@ def load_cookies(filename):
     return cookies
 
 
+class ObjectEncoder(json.JSONEncoder):
+    def default(self, obj):
+        print(type(obj))
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
+
+
 class IdTypeInfoAggregator:
     acceptable_fields = ()
 
@@ -67,6 +75,9 @@ class IdTypeInfoAggregator:
 
             if info:
                 info['URL'] = orig_url or url
+                if orig_url and url and orig_url != url:
+                    info['URL_secondary'] = url
+
         return info
 
     def collect(self):
@@ -132,7 +143,9 @@ class YaPublicUserId(IdTypeInfoAggregator):
 
     @classmethod
     def validate_id(cls, name, identifier):
-        return len(identifier) == 26 and name in cls.acceptable_fields
+        # len(identifier) == 26 and
+        # may be a non-standard
+        return name in cls.acceptable_fields
 
     def get_collections_API_info(self) -> dict:
         return self.simple_get_info_request(
@@ -173,12 +186,13 @@ class YaMessengerGuid(IdTypeInfoAggregator):
         return info
 
 
-def crawl(user_data: dict, cookies: dict = None, checked_values: list = None):
+def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: list = None):
     entities = (YaUsername, YaPublicUserId, YaMessengerGuid)
     if cookies is None:
         cookies = {}
     if checked_values is None:
         checked_values = []
+
     for k, v in user_data.items():
         values = list(v) if isinstance(v, set) else [v]
         for value in values:
@@ -196,7 +210,11 @@ def crawl(user_data: dict, cookies: dict = None, checked_values: list = None):
                 entity_obj.collect()
                 entity_obj.print()
 
-                crawl(entity_obj.info, cookies, checked_values)
+                output[entity_obj.identifier] = entity_obj.sites_results
+
+                crawl(entity_obj.info, output, cookies, checked_values)
+
+    return output
 
 
 def main():
@@ -215,7 +233,10 @@ def main():
 
     user_data = {identifier_type: identifier.split('@')[0]}
 
-    crawl(user_data, cookies)
+    output_data = crawl(user_data, cookies)
+
+    with open(f'{identifier}.txt', 'w') as f:
+        json.dump(dict(output_data), f, cls=ObjectEncoder, sort_keys=True, indent=4)
 
 
 if __name__ == '__main__':
