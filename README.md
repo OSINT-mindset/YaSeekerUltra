@@ -18,7 +18,9 @@ It can find:
 - Activity (count of reviews, comments; subscribers and subscriptions)
 - Account features (is it verified, banned, deleted, etc.)
 
-Checked Yandex services: Music, Collections, Bugbounty, Reviews, Q (Znatoki), O (Classified), Zen, Market, Messenger.
+Tool checks the following Yandex services: Music, Collections, Bugbounty, Reviews, Q (Znatoki), O (Classified), Zen, Market, Messenger.
+
+**Results are saved in the file `IDENTIFIER.txt` in JSON format.**
 
 ## Installation
 
@@ -27,6 +29,15 @@ Python 3.6+ and pip are required.
     pip3 install -r requirements.txt
 
 ## Usage
+
+```bash
+$ python3 ya_seeker.py login  # only for usernames
+# or 
+$ python3 ya_seeker.py c48fhxw0qppa50289r5c9ku4k4 yandex_public_id
+# identifier can have one of these types: username, yandex_public_id, id, yandex_messenger_guid
+```
+
+## Example
 
 ```bash
 $ python3 ya_seeker.py login
