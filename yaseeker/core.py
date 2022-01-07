@@ -1,11 +1,16 @@
-#!/usr/bin/env python3
 import json
 import os
 import sys
 from http.cookiejar import MozillaCookieJar
-
 import requests
 from socid_extractor import extract
+
+import asyncio
+from typing import List, Any
+
+from aiohttp import TCPConnector, ClientSession
+
+from .executor import AsyncioProgressbarQueueExecutor, AsyncioSimpleExecutor
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36',
@@ -30,7 +35,6 @@ def load_cookies(filename):
 
 class ObjectEncoder(json.JSONEncoder):
     def default(self, obj):
-        print(type(obj))
         if isinstance(obj, set):
             return list(obj)
         return json.JSONEncoder.default(self, obj)
@@ -190,6 +194,8 @@ class YaMessengerGuid(IdTypeInfoAggregator):
 
 
 def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: list = None):
+    # print(user_data)
+
     entities = (YaUsername, YaPublicUserId, YaMessengerGuid)
     if cookies is None:
         cookies = {}
@@ -208,10 +214,10 @@ def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: l
 
                 checked_values.append(value)
 
-                print(f'[*] Get info by {k} `{value}`...\n')
+                # print(f'[*] Get info by {k} `{value}`...\n')
                 entity_obj = e(value, cookies)
                 entity_obj.collect()
-                entity_obj.print()
+                # entity_obj.print()
 
                 output[entity_obj.identifier] = entity_obj.sites_results
 
@@ -220,27 +226,128 @@ def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: l
     return output
 
 
-def main():
-    identifier_type = 'username'
+class InputData:
+    def __init__(self, value: str):
+        self.value = value.split('@')[0]
+        self.identifier_type = 'username'
 
-    if len(sys.argv) > 1:
-        identifier = sys.argv[1]
-        if len(sys.argv) > 2:
-            identifier_type = sys.argv[2]
-    else:
-        identifier = input('Enter Yandex username / login / email: ')
+    def __str__(self):
+        return f'{self.value} ({self.identifier_type})'
 
-    cookies = load_cookies(COOKIES_FILENAME)
-    if not cookies:
-        print(f'Cookies not found, but are required for some sites. See README to learn how to use cookies.')
-
-    user_data = {identifier_type: identifier.split('@')[0]}
-
-    output_data = crawl(user_data, cookies)
-
-    with open(f'{identifier}.txt', 'w') as f:
-        json.dump(dict(output_data), f, cls=ObjectEncoder, sort_keys=True, indent=4)
+    def __repr__(self):
+        return f'{self.value} ({self.identifier_type})'
 
 
-if __name__ == '__main__':
-    main()
+class OutputData:
+    def __init__(self, value, dict_data, error):
+        self.value = value
+        self.error = error
+        self.__dict__.update(dict_data)
+        print(self.__dict__)
+
+    @property
+    def fields(self):
+        fields = list(self.__dict__.keys())
+        fields.remove('error')
+
+        return fields
+
+    def __str__(self):
+        error = ''
+        if self.error:
+            error = f' (error: {str(self.error)}'
+
+        result = ''
+
+        for field in self.fields:
+            field_pretty_name = field.title().replace('_', ' ')
+            value = self.__dict__.get(field)
+            if value:
+                result += f'{field_pretty_name}: {str(value)}\n'
+
+        result += f'{error}'
+        return result
+
+
+class OutputDataList:
+    def __init__(self, input_data: InputData, results: List[OutputData]):
+        self.input_data = input_data
+        self.results = results
+
+    def __repr__(self):
+        return f'Target {self.input_data}:\n' + '--------\n'.join(map(str, self.results))
+
+
+class Processor:
+    def __init__(self, *args, **kwargs):
+        from aiohttp_socks import ProxyConnector
+
+        # make http client session
+        proxy = kwargs.get('proxy')
+        self.proxy = proxy
+        if proxy:
+            connector = ProxyConnector.from_url(proxy, ssl=False)
+        else:
+            connector = TCPConnector(ssl=False)
+
+        self.session = ClientSession(
+            connector=connector, trust_env=True
+        )
+        if kwargs.get('no_progressbar'):
+            self.executor = AsyncioSimpleExecutor()
+        else:
+            self.executor = AsyncioProgressbarQueueExecutor()
+
+        # yandex setup
+        self.cookies = load_cookies(COOKIES_FILENAME)
+        if not self.cookies:
+            print(f'Cookies not found, but are required for some sites. See README to learn how to use cookies.')
+
+    async def close(self):
+        await self.session.close()
+
+
+    async def request(self, input_data: InputData) -> OutputDataList:
+        data = []
+        result = None
+        error = None
+
+        try:
+            identifier = {input_data.identifier_type: input_data.value}
+            output_data = crawl(identifier, {}, cookies=self.cookies)
+
+            print('here')
+
+            for ident, result in output_data.items():
+                for platform, fields in result.items():
+                    platform = platform.title().replace('_', ' ')
+                    fields = fields or {}
+                    fields.update({'platform': platform})
+
+                    print('fields')
+                    print(fields)
+                    od = OutputData(ident, fields, error)
+                    data.append(od)
+                    print(od)
+
+        except Exception as e:
+            error = e
+
+        results = OutputDataList(input_data, data)
+
+        return results
+
+
+    async def process(self, input_data: List[InputData]) -> List[OutputDataList]:
+        tasks = [
+            (
+                self.request, # func
+                [i],          # args
+                {}            # kwargs
+            )
+            for i in input_data
+        ]
+
+        results = await self.executor.run(tasks)
+
+        return results

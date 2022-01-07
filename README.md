@@ -1,7 +1,7 @@
 # YaSeeker
 
 <p align="center">
-  <img src="./logo.jpg" />
+  <img src="./pictures/logo.jpg" />
 </p>
 
 ## Description
