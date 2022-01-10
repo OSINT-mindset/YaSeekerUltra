@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 from http.cookiejar import MozillaCookieJar
@@ -194,8 +195,6 @@ class YaMessengerGuid(IdTypeInfoAggregator):
 
 
 def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: list = None):
-    # print(user_data)
-
     entities = (YaUsername, YaPublicUserId, YaMessengerGuid)
     if cookies is None:
         cookies = {}
@@ -242,8 +241,11 @@ class OutputData:
     def __init__(self, value, dict_data, error):
         self.value = value
         self.error = error
+
+        # postprocess
+        if 'image' in dict_data:
+            dict_data['image'] = dict_data['image'].replace('islands-200', 'islands-300')  # increase photo size
         self.__dict__.update(dict_data)
-        print(self.__dict__)
 
     @property
     def fields(self):
@@ -316,21 +318,17 @@ class Processor:
             identifier = {input_data.identifier_type: input_data.value}
             output_data = crawl(identifier, {}, cookies=self.cookies)
 
-            print('here')
-
             for ident, result in output_data.items():
                 for platform, fields in result.items():
                     platform = platform.title().replace('_', ' ')
                     fields = fields or {}
                     fields.update({'platform': platform})
 
-                    print('fields')
-                    print(fields)
                     od = OutputData(ident, fields, error)
                     data.append(od)
-                    print(od)
 
         except Exception as e:
+            logging.error(e, exc_info=True)
             error = e
 
         results = OutputDataList(input_data, data)
