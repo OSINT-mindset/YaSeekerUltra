@@ -67,7 +67,12 @@ class IdTypeInfoAggregator:
     def simple_get_info_request(self, url: str, headers_updates: dict = None, orig_url: str = None) -> dict:
         headers = dict(HEADERS)
         headers.update(headers_updates if headers_updates else {})
-        r = requests.get(url, headers=headers, cookies=self.cookies)
+
+        try:
+            r = requests.get(url, headers=headers, cookies=self.cookies)
+        except Exception as e:
+            print(f'Error for request by URL {url}: {e}\n')
+            return {}
 
         if '/checkcaptcha?key=' in r.text:
             info = {'Error': 'Captcha detected'}
@@ -228,7 +233,12 @@ def crawl(user_data: dict, output: dict, cookies: dict = None, checked_values: l
 class InputData:
     def __init__(self, value: str):
         self.value = value.split('@')[0]
-        self.identifier_type = 'username'
+        if len(self.value) == 26:
+            self.identifier_type = 'yandex_public_id'
+        else:
+            self.identifier_type = 'username'
+
+        print(f'Identifier "{self.value}" recognized as a {self.identifier_type}')
 
     def __str__(self):
         return f'{self.value} ({self.identifier_type})'
