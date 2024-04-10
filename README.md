@@ -86,6 +86,14 @@ $ python3 ya_seeker.py c48fhxw0qppa50289r5c9ku4k4 yandex_public_id
 ...
 ```
 
+### SOWEL classification
+
+This tool uses the following OSINT techniques:
+- [SOTL-1.4. Analyze Internal Identifiers](https://sowel.soxoj.com/internal-identifiers)
+- [SOTL-2.2. Search For Accounts On Other Platforms](https://sowel.soxoj.com/other-platform-accounts)
+- [SOTL-6.1. Check Logins Reuse To Find Another Account](https://sowel.soxoj.com/logins-reuse)
+- [SOTL-6.2. Check Nicknames Reuse To Find Another Account](https://sowel.soxoj.com/nicknames-reuse) 
+
 ## Cookies
 
 Some services are required cookies for API requests. Follow next steps to use your cookies for YaSeeker:
